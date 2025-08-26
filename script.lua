@@ -1,16 +1,3 @@
--- Fonction pour modifier un attribut dans toutes les tables du GC
-local function toggleTableAttribute(attribute, value)
-    for _, gcVal in pairs(getgc(true)) do
-        if type(gcVal) == "table" and rawget(gcVal, attribute) then
-            gcVal[attribute] = value
-        end
-    end
-end
-
-toggleTableAttribute("ShootCooldown", 0)
-toggleTableAttribute("ShootSpread", 0)
-toggleTableAttribute("ShootRecoil", 0)
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -24,32 +11,70 @@ local ADMIN_USERNAMES = {
 local isAimbotEnabled = false
 local isFlyEnabled = false
 local isWallhackEnabled = false
+local isInvincible = false
+local isInvisible = false
+local oneShotEnabled = false
+
 local aimRadius = 1000
 local flySpeed = 50
 local flyVelocity = nil
 local moveVector = Vector3.new(0, 0, 0)
 
-local UIS = UserInputService
+local guiPosition = UDim2.new(1, -170, 0, 20) -- position initiale
 
+-- Check mobile
 local function isMobile()
-    return UIS.TouchEnabled and not UIS.KeyboardEnabled
+    return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 end
 
--- Aimbot : trouve la cible la plus proche
+-- Draggable GUI function
+local function makeDraggable(frame)
+    local dragging = false
+    local dragInput, mousePos, framePos
+
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            mousePos = input.Position
+            framePos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    guiPosition = frame.Position -- sauvegarde de la position
+                end
+            end)
+        end
+    end)
+
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - mousePos
+            frame.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- Aimbot : cible la plus proche dans le rayon
 local function getClosestTarget()
     local closest = nil
     local shortestDistance = aimRadius
 
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
             local head = player.Character.Head
             local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
             if onScreen then
-                local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+                local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
                 local dist = (Vector2.new(screenPoint.X, screenPoint.Y) - center).Magnitude
                 if dist < shortestDistance then
                     shortestDistance = dist
-                    closest = head
+                    closest = player
                 end
             end
         end
@@ -58,66 +83,23 @@ local function getClosestTarget()
     return closest
 end
 
+-- Aimer la cible
 local function aimAt(target)
-    if target then
-        local dir = (target.Position - Camera.CFrame.Position).Unit
+    if target and target.Character and target.Character:FindFirstChild("Head") then
+        local head = target.Character.Head
+        local dir = (head.Position - Camera.CFrame.Position).Unit
         Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + dir)
     end
 end
 
--- Wallhack amélioré : rend le joueur visible à travers murs en modifiant Transparency et ajout Highlight
-local function applyWallhackToPlayer(player)
-    if player == LocalPlayer or not player.Character then return end
-    for _, part in ipairs(player.Character:GetChildren()) do
-        if part:IsA("BasePart") then
-            part.Transparency = 0.5
-            part.CanCollide = false -- peut traverser murs, mais on peut enlever si tu veux pas ça
-            if not part:FindFirstChild("WallhackHighlight") then
-                local highlight = Instance.new("Highlight")
-                highlight.Name = "WallhackHighlight"
-                highlight.Adornee = part
-                highlight.FillColor = Color3.fromRGB(0, 255, 255)
-                highlight.OutlineColor = Color3.fromRGB(0, 150, 255)
-                highlight.Parent = part
-            end
-        end
+-- One shot : kill instantané de la cible
+local function oneShot(target)
+    if target and target.Character and target.Character:FindFirstChild("Humanoid") then
+        target.Character.Humanoid.Health = 0
     end
 end
 
-local function removeWallhackFromPlayer(player)
-    if not player.Character then return end
-    for _, part in ipairs(player.Character:GetChildren()) do
-        if part:IsA("BasePart") then
-            part.Transparency = 0
-            part.CanCollide = true
-            local highlight = part:FindFirstChild("WallhackHighlight")
-            if highlight then highlight:Destroy() end
-        end
-    end
-end
-
-local function updateWallhack()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if isWallhackEnabled then
-            applyWallhackToPlayer(player)
-        else
-            removeWallhackFromPlayer(player)
-        end
-    end
-end
-
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function()
-        wait(1)
-        updateWallhack()
-    end)
-end)
-
-if LocalPlayer.Character then
-    updateWallhack()
-end
-
--- Fly indétectable client-side
+-- Fly toggle avec BodyVelocity
 local function toggleFly(state)
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or not LocalPlayer.Character:FindFirstChild("Humanoid") then return end
     local hrp = LocalPlayer.Character.HumanoidRootPart
@@ -126,8 +108,8 @@ local function toggleFly(state)
     if state then
         humanoid.PlatformStand = true
         flyVelocity = Instance.new("BodyVelocity")
-        flyVelocity.Velocity = Vector3.new(0,0,0)
-        flyVelocity.MaxForce = Vector3.new(1e5,1e5,1e5)
+        flyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+        flyVelocity.Velocity = Vector3.new(0, 0, 0)
         flyVelocity.Parent = hrp
     else
         humanoid.PlatformStand = false
@@ -138,19 +120,21 @@ local function toggleFly(state)
     end
 end
 
+-- Mouvement fly
 local function updateFlyMovement()
     if not flyVelocity then return end
 
-    local cameraLook = workspace.CurrentCamera.CFrame.LookVector
-    local rightVec = workspace.CurrentCamera.CFrame.RightVector
+    local camCFrame = workspace.CurrentCamera.CFrame
+    local forward = camCFrame.LookVector
+    local right = camCFrame.RightVector
 
-    local direction = (cameraLook * moveVector.Z) + (rightVec * moveVector.X) + Vector3.new(0, moveVector.Y, 0)
+    local direction = (right * moveVector.X) + (Vector3.new(0, moveVector.Y, 0)) + (forward * moveVector.Z)
     flyVelocity.Velocity = direction * flySpeed
 end
 
-local function onInputBegan(input, gameProcessed)
+-- Gestion des inputs clavier/tactile pour fly
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed or not isFlyEnabled then return end
-
     if input.UserInputType == Enum.UserInputType.Keyboard then
         if input.KeyCode == Enum.KeyCode.W then
             moveVector = Vector3.new(moveVector.X, moveVector.Y, 1)
@@ -165,12 +149,13 @@ local function onInputBegan(input, gameProcessed)
         elseif input.KeyCode == Enum.KeyCode.Q then
             moveVector = Vector3.new(moveVector.X, -1, moveVector.Z)
         end
+    elseif input.UserInputType == Enum.UserInputType.Touch then
+        -- Pour mobile, on peut gérer un joystick tactile plus tard si besoin
     end
-end
+end)
 
-local function onInputEnded(input, gameProcessed)
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
     if gameProcessed or not isFlyEnabled then return end
-
     if input.UserInputType == Enum.UserInputType.Keyboard then
         if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.S then
             moveVector = Vector3.new(moveVector.X, moveVector.Y, 0)
@@ -180,23 +165,50 @@ local function onInputEnded(input, gameProcessed)
             moveVector = Vector3.new(moveVector.X, 0, moveVector.Z)
         end
     end
-end
-
-RunService.RenderStepped:Connect(function()
-    if isAimbotEnabled then
-        local target = getClosestTarget()
-        aimAt(target)
-    end
-
-    if isFlyEnabled then
-        updateFlyMovement()
-    end
 end)
 
-UIS.InputBegan:Connect(onInputBegan)
-UIS.InputEnded:Connect(onInputEnded)
+-- Invincible : empêche de perdre de la vie
+local function toggleInvincible(state)
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("Humanoid") then return end
+    local humanoid = LocalPlayer.Character.Humanoid
 
--- Création du GUI complet
+    if state then
+        humanoid.MaxHealth = math.huge
+        humanoid.Health = math.huge
+
+        humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+            if humanoid.Health < humanoid.MaxHealth then
+                humanoid.Health = humanoid.MaxHealth
+            end
+        end)
+    else
+        humanoid.MaxHealth = 100
+        if humanoid.Health > 100 then
+            humanoid.Health = 100
+        end
+    end
+end
+
+-- Invisible : rendre perso transparent & no collisions
+local function toggleInvisible(state)
+    if not LocalPlayer.Character then return end
+
+    for _, part in ipairs(LocalPlayer.Character:GetChildren()) do
+        if part:IsA("BasePart") then
+            if state then
+                part.Transparency = 1
+                part.CanCollide = false
+            else
+                part.Transparency = 0
+                part.CanCollide = true
+            end
+        elseif part:IsA("Decal") or part:IsA("Texture") then
+            part.Transparency = state and 1 or 0
+        end
+    end
+end
+
+-- GUI
 local function createMainGUI()
     local gui = Instance.new("ScreenGui")
     gui.Name = "AdminToolsGUI"
@@ -204,8 +216,8 @@ local function createMainGUI()
     gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 160, 0, 180)
-    frame.Position = UDim2.new(1, -170, 0, 20)
+    frame.Size = UDim2.new(0, 160, 0, 260)
+    frame.Position = guiPosition
     frame.AnchorPoint = Vector2.new(1, 0)
     frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     frame.BorderSizePixel = 0
@@ -220,7 +232,8 @@ local function createMainGUI()
     title.TextColor3 = Color3.fromRGB(0, 255, 255)
     title.Parent = frame
 
-    -- Fonction utilitaire pour créer un bouton toggle
+    makeDraggable(frame)
+
     local function createToggleButton(text, yPos, callback)
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, -20, 0, 40)
@@ -258,14 +271,43 @@ local function createMainGUI()
 
     createToggleButton("Wallhack", 140, function(state)
         isWallhackEnabled = state
-        updateWallhack()
+        -- updateWallhack() -- à remettre si tu veux wallhack ici
+    end)
+
+    createToggleButton("One Shot", 190, function(state)
+        oneShotEnabled = state
+    end)
+
+    createToggleButton("Invincible", 240, function(state)
+        isInvincible = state
+        toggleInvincible(state)
+    end)
+
+    createToggleButton("Invisible", 290, function(state)
+        isInvisible = state
+        toggleInvisible(state)
     end)
 end
 
--- Activation si admin & mobile
+-- Boucle principale
+RunService.RenderStepped:Connect(function()
+    if isAimbotEnabled then
+        local target = getClosestTarget()
+        aimAt(target)
+        if oneShotEnabled and target then
+            oneShot(target)
+        end
+    end
+
+    if isFlyEnabled then
+        updateFlyMovement()
+    end
+end)
+
+-- Activation si admin & mobile (tu peux enlever isMobile() si tu veux desktop aussi)
 if ADMIN_USERNAMES[LocalPlayer.Name] and isMobile() then
     createMainGUI()
-    print("✅ Admin Tools prêtes (Aimbot, Fly, Wallhack)")
+    print("✅ Admin Tools prêtes.")
 else
     warn("❌ Ce script est réservé aux admins sur mobile.")
 end
