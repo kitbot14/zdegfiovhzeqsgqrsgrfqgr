@@ -5,7 +5,7 @@ local Camera = workspace.CurrentCamera
 
 local enabled = false
 local speed = 0.4
-local radius = 800
+local radius = 800 
 
 -- Récupère la team (StringValue) d’un joueur dans son Character
 local function getPlayerTeam(player)
