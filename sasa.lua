@@ -12,8 +12,7 @@ local ADMIN_USERNAMES = {
 }
 
 local ALLIES = {  -- Pseudos à ignorer dans l’aimbot (tes alliés)
-    ["PseudoAllie1"] = true,
-    ["PseudoAllie2"] = true,
+    ["modylem"] = true
 }
 
 local AIM_RADIUS = 1000
