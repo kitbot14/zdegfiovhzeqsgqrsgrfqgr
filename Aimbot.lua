@@ -2,19 +2,24 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+local UserInput = game:GetService("UserInputService")
 
-local aimbotEnabled = false
-local aimSpeed = 0.4
-local aimRadius = 800
+local enabled = false
+local speed = 0.4
+local radius = 800
+local fovColor = Color3.new(1,1,1)
 
+-- Vérifie si allié
 local function isAlly(player)
     return player.Team == LocalPlayer.Team
 end
 
+-- Trouver ennemi le plus proche dans le FOV
 local function getClosestEnemy()
     local closest = nil
-    local shortest = aimRadius
+    local shortest = radius
     local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and not isAlly(player) then
             local head = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
@@ -31,9 +36,11 @@ local function getClosestEnemy()
             end
         end
     end
+
     return closest
 end
 
+-- Aimer vers la cible
 local function aimAt(target)
     if target and target.Character then
         local head = target.Character:FindFirstChild("Head") or target.Character:FindFirstChild("HumanoidRootPart")
@@ -43,24 +50,37 @@ local function aimAt(target)
             if root then
                 local direction = (head.Position - root.Position).Unit
                 local desiredCFrame = CFrame.new(root.Position, root.Position + direction)
-                root.CFrame = root.CFrame:Lerp(desiredCFrame, aimSpeed)
+                root.CFrame = root.CFrame:Lerp(desiredCFrame, speed)
             end
         end
     end
 end
 
-RunService.RenderStepped:Connect(function()
-    if aimbotEnabled then
-        local target = getClosestEnemy()
-        if target then
-            aimAt(target)
-        end
-    end
-end)
+-- Public API
+local module = {}
 
--- API simple pour activer/désactiver aimbot
-return {
-    setEnabled = function(v) aimbotEnabled = v end,
-    setAimSpeed = function(v) aimSpeed = v end,
-    setAimRadius = function(v) aimRadius = v end,
-}
+function module.SetEnabled(v)
+    enabled = v
+end
+
+function module.SetSpeed(v)
+    speed = v
+end
+
+function module.SetRadius(v)
+    radius = v
+end
+
+function module.SetColor(c)
+    fovColor = c
+end
+
+function module.Update()
+    if not enabled then return end
+    local target = getClosestEnemy()
+    if target then
+        aimAt(target)
+    end
+end
+
+return module
