@@ -13,7 +13,7 @@ local function getTeamId(player)
     return nil
 end
 
-local LocalTeamId = getTeamId(LocalPlayer)
+local LocalTeamId = nil
 
 local function isAlly(player)
     local teamId = getTeamId(player)
@@ -46,6 +46,7 @@ local function applyHighlight(player)
 end
 
 local function updateWallhack()
+    LocalTeamId = getTeamId(LocalPlayer)  -- mettre à jour à chaque frame
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
             applyHighlight(p)
@@ -67,7 +68,6 @@ local module = {}
 function module.SetEnabled(v)
     enabled = v
     if v then
-        LocalTeamId = getTeamId(LocalPlayer)  -- refresh team id on enable
         updateWallhack()
     else
         clearHighlights()
