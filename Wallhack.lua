@@ -1,8 +1,8 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
-local wallhackEnabled = false
-local wallColor = Color3.new(1, 0, 0)
+local enabled = false
+local wallColor = Color3.new(1,0,0)
 
 local function isAlly(player)
     return player.Team == LocalPlayer.Team
@@ -13,7 +13,7 @@ local function updateWallhack()
         if p ~= LocalPlayer and p.Character and not isAlly(p) then
             local char = p.Character
             local hl = char:FindFirstChild("Wallhl")
-            if wallhackEnabled then
+            if enabled then
                 if not hl then
                     hl = Instance.new("Highlight")
                     hl.Name = "Wallhl"
@@ -34,13 +34,33 @@ local function updateWallhack()
     end
 end
 
-game:GetService("RunService").RenderStepped:Connect(function()
-    if wallhackEnabled then
+local module = {}
+
+function module.SetEnabled(v)
+    enabled = v
+    if not enabled then
+        -- Clean les highlights quand off
+        for _, p in ipairs(Players:GetPlayers()) do
+            local char = p.Character
+            if char then
+                local hl = char:FindFirstChild("Wallhl")
+                if hl then hl:Destroy() end
+            end
+        end
+    end
+end
+
+function module.SetColor(c)
+    wallColor = c
+    if enabled then
         updateWallhack()
     end
-end)
+end
 
-return {
-    setEnabled = function(v) wallhackEnabled = v end,
-    setColor = function(c) wallColor = c end,
-}
+function module.Update()
+    if enabled then
+        updateWallhack()
+    end
+end
+
+return module
