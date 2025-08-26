@@ -16,13 +16,13 @@ if not isMobile() then return end
 local aimbotEnabled = false
 local aimSpeed = 0.4
 local aimRadius = 800
-local fovColor = Color3.new(1, 1, 1)
+local fovColor = Color3.new(1,1,1)
 local wallhackEnabled = false
-local wallColor = Color3.new(1, 0, 0)
+local wallColor = Color3.new(1,0,0)
 local flyEnabled = false
 local flying = false
 
--- Cercle FOV avec Drawing API
+-- FOV circle
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Visible = false
 FOVCircle.Thickness = 2
@@ -36,20 +36,22 @@ local function isAlly(player)
     return player.Team == LocalPlayer.Team
 end
 
--- Trouver l’ennemi le plus proche dans le FOV
+-- Trouver l'ennemi le plus proche dans le FOV
 local function getClosestEnemy()
     local closest = nil
     local shortest = aimRadius
-    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and not isAlly(player) then
             local head = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
             if head then
                 local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-                if onScreen and screenPos.Z > 0 then -- devant la caméra
+                if onScreen and screenPos.Z > 0 then
                     local pos2D = Vector2.new(screenPos.X, screenPos.Y)
                     local dist = (pos2D - screenCenter).Magnitude
+                    -- DEBUG : décommenter pour voir les distances
+                    -- print(player.Name, "distance to center:", dist)
                     if dist < shortest then
                         shortest = dist
                         closest = player
@@ -62,7 +64,7 @@ local function getClosestEnemy()
     return closest
 end
 
--- Aimbot mobile → on fait tourner le personnage vers la cible
+-- Aimbot mobile → faire tourner le personnage vers la cible en douceur
 local function aimAt(target)
     if target and target.Character then
         local head = target.Character:FindFirstChild("Head") or target.Character:FindFirstChild("HumanoidRootPart")
@@ -71,14 +73,14 @@ local function aimAt(target)
             local root = char:FindFirstChild("HumanoidRootPart")
             if root then
                 local direction = (head.Position - root.Position).Unit
-                local newCFrame = CFrame.new(root.Position, root.Position + direction)
-                root.CFrame = root.CFrame:Lerp(newCFrame, aimSpeed)
+                local desiredCFrame = CFrame.new(root.Position, root.Position + direction)
+                root.CFrame = root.CFrame:Lerp(desiredCFrame, aimSpeed)
             end
         end
     end
 end
 
--- Wallhack (Highlight)
+-- Wallhack
 local function updateWallhack()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and not isAlly(p) then
@@ -92,8 +94,7 @@ local function updateWallhack()
                     hl.OutlineColor = wallColor
                     hl.FillTransparency = 0.3
                     hl.OutlineTransparency = 0
-                    -- Attacher au HumanoidRootPart si possible, sinon à la char
-                    hl.Adornee = char:FindFirstChild("HumanoidRootPart") or char
+                    hl.Adornee = char
                     hl.Parent = char
                 else
                     hl.FillColor = wallColor
@@ -132,7 +133,7 @@ local function disableFly()
     end
 end
 
--- Détection du saut pour activer fly
+-- Détection du saut
 local function setupJumpFly()
     local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local hum = char:WaitForChild("Humanoid")
@@ -147,6 +148,7 @@ local function setupJumpFly()
         end
     end)
 end
+
 LocalPlayer.CharacterAdded:Connect(setupJumpFly)
 if LocalPlayer.Character then
     setupJumpFly()
@@ -156,10 +158,10 @@ end
 local Window = Rayfield:CreateWindow({
     Name = "Aimbot + Fly Mobile",
     LoadingTitle = "Mobile Script",
-    LoadingSubtitle = "Aimbot + Fly + Wallhack",
+    LoadingSubtitle = "Aimbot & Fly OK",
     Theme = "Midnight",
-    ConfigurationSaving = { Enabled = false },
-    Discord = { Enabled = false },
+    ConfigurationSaving = {Enabled = false},
+    Discord = {Enabled = false},
     KeySystem = false
 })
 
@@ -228,16 +230,18 @@ FlyTab:CreateToggle({
 
 Rayfield:Notify({
     Title = "✅ Chargé",
-    Content = "Aimbot + Fly + Wallhack OK sur mobile",
+    Content = "Aimbot + Fly + ESP OK sur mobile",
     Duration = 4
 })
 
 -- Boucle principale
 RunService.RenderStepped:Connect(function()
-    -- Cercle FOV au centre
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    FOVCircle.Radius = aimRadius
-    FOVCircle.Color = fovColor
+    -- Mise à jour position cercle FOV au centre écran
+    if FOVCircle.Visible then
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        FOVCircle.Radius = aimRadius
+        FOVCircle.Color = fovColor
+    end
 
     if aimbotEnabled then
         local target = getClosestEnemy()
