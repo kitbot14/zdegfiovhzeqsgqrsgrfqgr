@@ -7,21 +7,28 @@ local enabled = false
 local speed = 0.4
 local radius = 800
 
--- Attend que la team soit bien définie avant de lancer le script
-local function waitForTeam()
-    while not LocalPlayer or not LocalPlayer.TeamColor or LocalPlayer.TeamColor == BrickColor.new("Institutional white") do
-        wait(0.1)
+-- Récupère la team "team" (StringValue) du joueur
+local function getPlayerTeam(player)
+    if player.Character then
+        local teamVal = player.Character:FindFirstChild("team") or player.Character:FindFirstChild("Team")
+        if teamVal and teamVal:IsA("StringValue") then
+            return teamVal.Value
+        end
     end
+    return nil
 end
-waitForTeam()
 
+-- Vérifie si un joueur est allié (même team)
 local function isAlly(player)
-    -- Parfois player.TeamColor peut être nil, on sécurise
-    if not player or not player:IsA("Player") then return false end
-    if not player.TeamColor or not LocalPlayer.TeamColor then return false end
-    return player.TeamColor == LocalPlayer.TeamColor
+    local localTeam = getPlayerTeam(LocalPlayer)
+    local otherTeam = getPlayerTeam(player)
+    if localTeam and otherTeam then
+        return localTeam == otherTeam
+    end
+    return false
 end
 
+-- Trouve l'ennemi le plus proche dans le FOV
 local function getClosestEnemy()
     local closest = nil
     local shortest = radius
@@ -45,6 +52,7 @@ local function getClosestEnemy()
     return closest
 end
 
+-- Vise vers la cible en douceur
 local function aimAt(target)
     if target and target.Character then
         local head = target.Character:FindFirstChild("Head") or target.Character:FindFirstChild("HumanoidRootPart")
