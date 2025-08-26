@@ -11,31 +11,31 @@ toggleTableAttribute("ShootCooldown", 0)
 toggleTableAttribute("ShootSpread", 0)
 toggleTableAttribute("ShootRecoil", 0)
 
--- 📱 Aimbot Admin Mobile avec GUI - LocalScript (à placer dans StarterPlayerScripts)
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local ContextActionService = game:GetService("ContextActionService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
-local UIS = UserInputService
 
--- ✅ Configuration
 local ADMIN_USERNAMES = {
-    ["kitlebot10"] = true, -- ⚠️ Remplace "TonPseudo" par ton nom Roblox
+    ["kitlebot10"] = true,
 }
 
 local isAimbotEnabled = false
 local isFlyEnabled = false
+local isWallhackEnabled = false
 local aimRadius = 1000
+local flySpeed = 50
+local flyVelocity = nil
+local moveVector = Vector3.new(0, 0, 0)
 
--- 🧠 Détection mobile
+local UIS = UserInputService
+
 local function isMobile()
     return UIS.TouchEnabled and not UIS.KeyboardEnabled
 end
 
--- 🎯 Fonction pour trouver la cible la plus proche
+-- Aimbot : trouve la cible la plus proche
 local function getClosestTarget()
     local closest = nil
     local shortestDistance = aimRadius
@@ -44,11 +44,9 @@ local function getClosestTarget()
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
             local head = player.Character.Head
             local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
-
             if onScreen then
                 local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
                 local dist = (Vector2.new(screenPoint.X, screenPoint.Y) - center).Magnitude
-
                 if dist < shortestDistance then
                     shortestDistance = dist
                     closest = head
@@ -60,7 +58,6 @@ local function getClosestTarget()
     return closest
 end
 
--- 🧭 Viser automatiquement
 local function aimAt(target)
     if target then
         local dir = (target.Position - Camera.CFrame.Position).Unit
@@ -68,54 +65,69 @@ local function aimAt(target)
     end
 end
 
--- 🧱 Wallhack : rendre tous les joueurs semi-transparents et en surbrillance
-local function enableWallhack()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            for _, part in ipairs(player.Character:GetChildren()) do
-                if part:IsA("BasePart") then
-                    part.LocalTransparencyModifier = 0.5 -- semi-transparent
-                    -- Optionnel : ajouter un highlight
-                    if not part:FindFirstChild("WallhackHighlight") then
-                        local highlight = Instance.new("SelectionBox")
-                        highlight.Name = "WallhackHighlight"
-                        highlight.Adornee = part
-                        highlight.LineThickness = 0.05
-                        highlight.Color3 = Color3.fromRGB(0, 255, 255)
-                        highlight.Parent = part
-                    end
-                end
+-- Wallhack amélioré : rend le joueur visible à travers murs en modifiant Transparency et ajout Highlight
+local function applyWallhackToPlayer(player)
+    if player == LocalPlayer or not player.Character then return end
+    for _, part in ipairs(player.Character:GetChildren()) do
+        if part:IsA("BasePart") then
+            part.Transparency = 0.5
+            part.CanCollide = false -- peut traverser murs, mais on peut enlever si tu veux pas ça
+            if not part:FindFirstChild("WallhackHighlight") then
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "WallhackHighlight"
+                highlight.Adornee = part
+                highlight.FillColor = Color3.fromRGB(0, 255, 255)
+                highlight.OutlineColor = Color3.fromRGB(0, 150, 255)
+                highlight.Parent = part
             end
         end
     end
 end
 
--- Mise à jour wallhack à chaque joueur ajouté ou respawn
+local function removeWallhackFromPlayer(player)
+    if not player.Character then return end
+    for _, part in ipairs(player.Character:GetChildren()) do
+        if part:IsA("BasePart") then
+            part.Transparency = 0
+            part.CanCollide = true
+            local highlight = part:FindFirstChild("WallhackHighlight")
+            if highlight then highlight:Destroy() end
+        end
+    end
+end
+
+local function updateWallhack()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if isWallhackEnabled then
+            applyWallhackToPlayer(player)
+        else
+            removeWallhackFromPlayer(player)
+        end
+    end
+end
+
 Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function(char)
+    player.CharacterAdded:Connect(function()
         wait(1)
-        enableWallhack()
+        updateWallhack()
     end)
 end)
 
 if LocalPlayer.Character then
-    enableWallhack()
+    updateWallhack()
 end
 
--- ✈️ Fly basique local (client-side) indétectable côté serveur
-local flySpeed = 50
-local flyVelocity = nil
-
+-- Fly indétectable client-side
 local function toggleFly(state)
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or not LocalPlayer.Character:FindFirstChild("Humanoid") then return end
     local hrp = LocalPlayer.Character.HumanoidRootPart
     local humanoid = LocalPlayer.Character.Humanoid
 
     if state then
-        humanoid.PlatformStand = true -- désactive la physique classique
+        humanoid.PlatformStand = true
         flyVelocity = Instance.new("BodyVelocity")
         flyVelocity.Velocity = Vector3.new(0,0,0)
-        flyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+        flyVelocity.MaxForce = Vector3.new(1e5,1e5,1e5)
         flyVelocity.Parent = hrp
     else
         humanoid.PlatformStand = false
@@ -125,9 +137,6 @@ local function toggleFly(state)
         end
     end
 end
-
--- Contrôles du fly (touches WASD + E/Q pour monter/descendre, ou commandes tactiles)
-local moveVector = Vector3.new(0,0,0)
 
 local function updateFlyMovement()
     if not flyVelocity then return end
@@ -139,7 +148,6 @@ local function updateFlyMovement()
     flyVelocity.Velocity = direction * flySpeed
 end
 
--- Gestion des touches pour le fly
 local function onInputBegan(input, gameProcessed)
     if gameProcessed or not isFlyEnabled then return end
 
@@ -157,9 +165,6 @@ local function onInputBegan(input, gameProcessed)
         elseif input.KeyCode == Enum.KeyCode.Q then
             moveVector = Vector3.new(moveVector.X, -1, moveVector.Z)
         end
-    elseif input.UserInputType == Enum.UserInputType.Touch then
-        -- Pour mobile, on pourrait gérer un joystick virtuel ou rien ici (complexe)
-        -- Pour simplifier, on ignore ou on peut étendre plus tard
     end
 end
 
@@ -177,8 +182,12 @@ local function onInputEnded(input, gameProcessed)
     end
 end
 
--- Mise à jour continue du fly
 RunService.RenderStepped:Connect(function()
+    if isAimbotEnabled then
+        local target = getClosestTarget()
+        aimAt(target)
+    end
+
     if isFlyEnabled then
         updateFlyMovement()
     end
@@ -187,63 +196,76 @@ end)
 UIS.InputBegan:Connect(onInputBegan)
 UIS.InputEnded:Connect(onInputEnded)
 
--- 🖼️ Création du GUI avec boutons en haut à droite (Aimbot + Fly)
-local function createAimbotGUI()
+-- Création du GUI complet
+local function createMainGUI()
     local gui = Instance.new("ScreenGui")
-    gui.Name = "AimbotGUI"
+    gui.Name = "AdminToolsGUI"
     gui.ResetOnSpawn = false
     gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-    -- Bouton Aimbot
-    local toggleAimbotBtn = Instance.new("TextButton")
-    toggleAimbotBtn.Size = UDim2.new(0, 120, 0, 50)
-    toggleAimbotBtn.Position = UDim2.new(1, -130, 0, 20)
-    toggleAimbotBtn.AnchorPoint = Vector2.new(1, 0)
-    toggleAimbotBtn.Text = "Aimbot OFF"
-    toggleAimbotBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    toggleAimbotBtn.TextColor3 = Color3.new(1, 1, 1)
-    toggleAimbotBtn.Font = Enum.Font.GothamBold
-    toggleAimbotBtn.TextSize = 20
-    toggleAimbotBtn.Parent = gui
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 160, 0, 180)
+    frame.Position = UDim2.new(1, -170, 0, 20)
+    frame.AnchorPoint = Vector2.new(1, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    frame.BorderSizePixel = 0
+    frame.Parent = gui
 
-    toggleAimbotBtn.MouseButton1Click:Connect(function()
-        isAimbotEnabled = not isAimbotEnabled
-        toggleAimbotBtn.Text = isAimbotEnabled and "Aimbot ON" or "Aimbot OFF"
-        toggleAimbotBtn.BackgroundColor3 = isAimbotEnabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(30, 30, 30)
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.BackgroundTransparency = 1
+    title.Text = "Admin Tools"
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 20
+    title.TextColor3 = Color3.fromRGB(0, 255, 255)
+    title.Parent = frame
+
+    -- Fonction utilitaire pour créer un bouton toggle
+    local function createToggleButton(text, yPos, callback)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -20, 0, 40)
+        btn.Position = UDim2.new(0, 10, 0, yPos)
+        btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 18
+        btn.Text = text .. " OFF"
+        btn.Parent = frame
+
+        btn.MouseButton1Click:Connect(function()
+            local isOn = btn.Text:find("ON") == nil
+            if isOn then
+                btn.Text = text .. " ON"
+                btn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+            else
+                btn.Text = text .. " OFF"
+                btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            end
+            callback(isOn)
+        end)
+
+        return btn
+    end
+
+    createToggleButton("Aimbot", 40, function(state)
+        isAimbotEnabled = state
     end)
 
-    -- Bouton Fly
-    local toggleFlyBtn = Instance.new("TextButton")
-    toggleFlyBtn.Size = UDim2.new(0, 120, 0, 50)
-    toggleFlyBtn.Position = UDim2.new(1, -130, 0, 80) -- juste en dessous du bouton Aimbot
-    toggleFlyBtn.AnchorPoint = Vector2.new(1, 0)
-    toggleFlyBtn.Text = "Fly OFF"
-    toggleFlyBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    toggleFlyBtn.TextColor3 = Color3.new(1, 1, 1)
-    toggleFlyBtn.Font = Enum.Font.GothamBold
-    toggleFlyBtn.TextSize = 20
-    toggleFlyBtn.Parent = gui
+    createToggleButton("Fly", 90, function(state)
+        isFlyEnabled = state
+        toggleFly(state)
+    end)
 
-    toggleFlyBtn.MouseButton1Click:Connect(function()
-        isFlyEnabled = not isFlyEnabled
-        toggleFlyBtn.Text = isFlyEnabled and "Fly ON" or "Fly OFF"
-        toggleFlyBtn.BackgroundColor3 = isFlyEnabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(30, 30, 30)
-        toggleFly(isFlyEnabled)
+    createToggleButton("Wallhack", 140, function(state)
+        isWallhackEnabled = state
+        updateWallhack()
     end)
 end
 
--- 🚀 Lancer l’aimbot
-RunService.RenderStepped:Connect(function()
-    if isAimbotEnabled then
-        local target = getClosestTarget()
-        aimAt(target)
-    end
-end)
-
--- ✅ Lancer si admin et mobile
+-- Activation si admin & mobile
 if ADMIN_USERNAMES[LocalPlayer.Name] and isMobile() then
-    createAimbotGUI()
-    print("✅ Aimbot & Fly admin mobile prêt.")
+    createMainGUI()
+    print("✅ Admin Tools prêtes (Aimbot, Fly, Wallhack)")
 else
     warn("❌ Ce script est réservé aux admins sur mobile.")
 end
