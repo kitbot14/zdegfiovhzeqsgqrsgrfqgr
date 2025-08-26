@@ -43,14 +43,17 @@ local function getClosestEnemy()
     local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and not isAlly(player) then
-            local headPos = player.Character.Head.Position
-            local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
-            if onScreen then
-                local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-                if dist < shortest then
-                    shortest = dist
-                    closest = player
+        if player ~= LocalPlayer and player.Character and not isAlly(player) then
+            local head = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
+            if head then
+                local screenPos = Camera:WorldToViewportPoint(head.Position)
+                if screenPos.Z > 0 then -- devant la caméra
+                    local pos2D = Vector2.new(screenPos.X, screenPos.Y)
+                    local dist = (pos2D - screenCenter).Magnitude
+                    if dist < shortest then
+                        shortest = dist
+                        closest = player
+                    end
                 end
             end
         end
@@ -61,14 +64,16 @@ end
 
 -- Aimbot mobile → on fait tourner le personnage
 local function aimAt(target)
-    if target and target.Character and target.Character:FindFirstChild("Head") then
-        local headPos = target.Character.Head.Position
+    if target and target.Character then
+        local head = target.Character:FindFirstChild("Head") or target.Character:FindFirstChild("HumanoidRootPart")
         local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            local root = char.HumanoidRootPart
-            local dir = (headPos - root.Position).Unit
-            local newCFrame = CFrame.new(root.Position, root.Position + dir)
-            root.CFrame = root.CFrame:Lerp(newCFrame, aimSpeed)
+        if head and char then
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if root then
+                local dir = (head.Position - root.Position).Unit
+                local newCFrame = CFrame.new(root.Position, root.Position + dir)
+                root.CFrame = root.CFrame:Lerp(newCFrame, aimSpeed)
+            end
         end
     end
 end
@@ -228,7 +233,10 @@ Rayfield:Notify({
 
 -- Boucle principale
 RunService.RenderStepped:Connect(function()
+    -- Mise à jour position cercle FOV au centre écran
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    FOVCircle.Radius = aimRadius
+    FOVCircle.Color = fovColor
 
     if aimbotEnabled then
         local target = getClosestEnemy()
