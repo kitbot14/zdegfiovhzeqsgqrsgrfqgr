@@ -1,0 +1,46 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local wallhackEnabled = false
+local wallColor = Color3.new(1, 0, 0)
+
+local function isAlly(player)
+    return player.Team == LocalPlayer.Team
+end
+
+local function updateWallhack()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and not isAlly(p) then
+            local char = p.Character
+            local hl = char:FindFirstChild("Wallhl")
+            if wallhackEnabled then
+                if not hl then
+                    hl = Instance.new("Highlight")
+                    hl.Name = "Wallhl"
+                    hl.FillColor = wallColor
+                    hl.OutlineColor = wallColor
+                    hl.FillTransparency = 0.3
+                    hl.OutlineTransparency = 0
+                    hl.Adornee = char
+                    hl.Parent = char
+                else
+                    hl.FillColor = wallColor
+                    hl.OutlineColor = wallColor
+                end
+            elseif hl then
+                hl:Destroy()
+            end
+        end
+    end
+end
+
+game:GetService("RunService").RenderStepped:Connect(function()
+    if wallhackEnabled then
+        updateWallhack()
+    end
+end)
+
+return {
+    setEnabled = function(v) wallhackEnabled = v end,
+    setColor = function(c) wallColor = c end,
+}
