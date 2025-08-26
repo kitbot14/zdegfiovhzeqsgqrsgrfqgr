@@ -34,7 +34,7 @@ FOVCircle.Radius = aimRadius
 
 -- Chargement modules (à adapter avec tes liens http, ici j’ai mis des exemples)
 local AimbotModule = loadstring(game:HttpGet("https://tonserver.com/aimbot.lua"))()
-local WallhackModule = loadstring(game:HttpGet("https://tonserver.com/wallhack.lua"))()
+local WallhackModule = loadstring(game:HttpGet("https://github.com/kitbot14/zdegfiovhzeqsgqrsgrfqgr/raw/refs/heads/main/Wallhack.lua"))()
 local FlyModule = loadstring(game:HttpGet("https://github.com/kitbot14/zdegfiovhzeqsgqrsgrfqgr/raw/refs/heads/main/Fly.lua"))()
 
 -- Setup menu Rayfield
