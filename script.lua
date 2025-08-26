@@ -33,7 +33,7 @@ FOVCircle.Filled = false
 FOVCircle.Radius = aimRadius
 
 -- Chargement modules (à adapter avec tes liens http, ici j’ai mis des exemples)
-local AimbotModule = loadstring(game:HttpGet("https://tonserver.com/aimbot.lua"))()
+local AimbotModule = loadstring(game:HttpGet("https://github.com/kitbot14/zdegfiovhzeqsgqrsgrfqgr/raw/refs/heads/main/Aimbot.lua"))()
 local WallhackModule = loadstring(game:HttpGet("https://github.com/kitbot14/zdegfiovhzeqsgqrsgrfqgr/raw/refs/heads/main/Wallhack.lua"))()
 local FlyModule = loadstring(game:HttpGet("https://github.com/kitbot14/zdegfiovhzeqsgqrsgrfqgr/raw/refs/heads/main/Fly.lua"))()
 
