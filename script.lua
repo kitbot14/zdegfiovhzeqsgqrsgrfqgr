@@ -1,175 +1,144 @@
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer      = Players.LocalPlayer
+local Camera           = workspace.CurrentCamera
 
-local isAimbot = false
-local aimSpeed = 0.2
-local aimRadius = 1000
+-- Aimbot settings
+local isAimbot        = false
+local aimSpeed        = 0.3
+local aimRadius       = 800
+local predictionTime  = 0.1
+local aimbotKey       = Enum.KeyCode.E
 
-local isWallhack = false
-local wallColor = Color3.fromRGB(255, 0, 0)
+-- Visual FOV
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = false
+FOVCircle.Thickness = 2
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Transparency = 0.7
+FOVCircle.Filled = false
+FOVCircle.NumSides = 64
 
--- Fonction pour le wallhack
-local function applyWallhack(state)
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local highlight = player.Character:FindFirstChild("WallHighlight")
-            if state then
-                if not highlight then
-                    local newHighlight = Instance.new("Highlight")
-                    newHighlight.Name = "WallHighlight"
-                    newHighlight.FillColor = wallColor
-                    newHighlight.OutlineColor = wallColor
-                    newHighlight.FillTransparency = 0.5
-                    newHighlight.OutlineTransparency = 0
-                    newHighlight.Adornee = player.Character
-                    newHighlight.Parent = player.Character
-                else
-                    highlight.FillColor = wallColor
-                    highlight.OutlineColor = wallColor
-                end
-            elseif highlight then
-                highlight:Destroy()
+-- Predict player movement velocity
+local lastPos = {}
+local velocities = {}
+
+RunService.Heartbeat:Connect(function(dt)
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+            local part = pl.Character.HumanoidRootPart
+            if not lastPos[pl] then
+                lastPos[pl] = part.Position
+                velocities[pl] = Vector3.new()
+            else
+                local vel = (part.Position - lastPos[pl]) / dt
+                velocities[pl] = velocities[pl]:Lerp(vel, 0.5)
+                lastPos[pl] = part.Position
             end
         end
-    end
-end
-
--- Trouver la cible la plus proche
-local function getClosestTarget()
-    local closest = nil
-    local shortest = aimRadius
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-            local head = player.Character.Head
-            local screen, onScreen = Camera:WorldToViewportPoint(head.Position)
-            if onScreen then
-                local dist = (Vector2.new(screen.X, screen.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
-                if dist < shortest then
-                    shortest = dist
-                    closest = player
-                end
-            end
-        end
-    end
-
-    return closest
-end
-
--- Aimbot avec interpolation
-local function aimAt(player)
-    if player and player.Character and player.Character:FindFirstChild("Head") then
-        local head = player.Character.Head
-        local current = Camera.CFrame
-        local goal = CFrame.new(current.Position, head.Position)
-        Camera.CFrame = current:Lerp(goal, aimSpeed)
-    end
-end
-
--- Création de l'interface
-local Window = Rayfield:CreateWindow({
-    Name = "Admin Panel",
-    LoadingTitle = "Chargement...",
-    LoadingSubtitle = "Aimbot + Wallhack + TP",
-    Theme = "Midnight",
-    ConfigurationSaving = {
-        Enabled = true,
-        FileName = "AdminConfig"
-    },
-    Discord = { Enabled = false },
-    KeySystem = false,
-})
-
-local Main = Window:CreateTab("Main", nil)
-
--- Aimbot
-Main:CreateSection("🎯 Aimbot")
-Main:CreateToggle({
-    Name = "Activer Aimbot",
-    CurrentValue = false,
-    Callback = function(v)
-        isAimbot = v
-    end
-})
-
-Main:CreateSlider({
-    Name = "Vitesse du Aimbot",
-    Range = {0.05, 1},
-    Increment = 0.05,
-    CurrentValue = aimSpeed,
-    Callback = function(v)
-        aimSpeed = v
-    end
-})
-
-Main:CreateSlider({
-    Name = "Rayon de détection",
-    Range = {100, 2000},
-    Increment = 100,
-    CurrentValue = aimRadius,
-    Callback = function(v)
-        aimRadius = v
-    end
-})
-
--- Wallhack
-Main:CreateSection("🟥 Wallhack")
-Main:CreateToggle({
-    Name = "Activer Wallhack",
-    CurrentValue = false,
-    Callback = function(v)
-        isWallhack = v
-        applyWallhack(v)
-    end
-})
-
-Main:CreateColorPicker({
-    Name = "Couleur du Wallhack",
-    Color = wallColor,
-    Callback = function(c)
-        wallColor = c
-        if isWallhack then applyWallhack(true) end
-    end
-})
-
--- Téléportation
-Main:CreateSection("📍 Téléportation")
-Main:CreateButton({
-    Name = "Ouvrir Menu Téléportation",
-    Callback = function()
-        local tpTab = Window:CreateTab("Joueurs", nil)
-        tpTab:CreateSection("Clique sur un joueur pour te téléporter")
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                tpTab:CreateButton({
-                    Name = player.Name,
-                    Callback = function()
-                        local targetHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                        local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        if targetHRP and myHRP then
-                            myHRP.CFrame = targetHRP.CFrame + Vector3.new(0, 5, 0)
-                        end
-                    end
-                })
-            end
-        end
-    end
-})
-
--- Exécution du aimbot
-RunService.RenderStepped:Connect(function()
-    if isAimbot then
-        local target = getClosestTarget()
-        aimAt(target)
     end
 end)
 
-Rayfield:Notify({
-    Title = "✅ Panel chargé",
-    Content = "Aimbot & Téléportation disponibles",
-    Duration = 4
+-- Find closest target within FOV radius
+local function getClosestTarget()
+    local closest, shortest = nil, aimRadius
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl ~= LocalPlayer and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = pl.Character.HumanoidRootPart
+            local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            if onScreen then
+                local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                if dist < shortest then
+                    shortest, closest = dist, pl
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- Smooth aim with prediction
+local function aimAt(pl, dt)
+    if not (pl and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart")) then return end
+    local part = pl.Character.HumanoidRootPart
+    local predicted = part.Position + velocities[pl] * predictionTime
+    local from = Camera.CFrame
+    local to = CFrame.new(from.Position, predicted)
+    Camera.CFrame = from:Lerp(to, aimSpeed * dt * 60)
+end
+
+-- Toggle aiming with key
+UserInputService.InputBegan:Connect(function(input, processed)
+    if not processed and input.KeyCode == aimbotKey then
+        isAimbot = not isAimbot
+        FOVCircle.Visible = isAimbot
+    end
+end)
+
+-- Rayfield UI
+local Window = Rayfield:CreateWindow({
+    Name = "Advanced Aimbot Panel",
+    LoadingTitle = "Chargement...",
+    LoadingSubtitle = "Paramétrage Aimbot",
+    Theme = "Midnight",
+    ConfigurationSaving = { Enabled = true, FileName = "AimConfig" },
+    Discord = { Enabled = false },
+    KeySystem = false
 })
+
+local Main = Window:CreateTab("Aimbot", nil)
+Main:CreateSection("Aimbot Settings")
+
+Main:CreateToggle({
+    Name = "Activer Aimbot",
+    CurrentValue = isAimbot,
+    Callback = function(v)
+        isAimbot = v
+        FOVCircle.Visible = v
+    end
+})
+
+Main:CreateSlider({
+    Name = "Vitesse (smooth)",
+    Range = {0.1, 1},
+    Increment = 0.1,
+    CurrentValue = aimSpeed,
+    Callback = function(v) aimSpeed = v end
+})
+
+Main:CreateSlider({
+    Name = "Rayon FOV",
+    Range = {100, 1500},
+    Increment = 100,
+    CurrentValue = aimRadius,
+    Suffix = " studs",
+    Callback = function(v) aimRadius = v; FOVCircle.Radius = v end
+})
+
+Main:CreateSlider({
+    Name = "Prediction (sec)",
+    Range = {0, 0.5},
+    Increment = 0.05,
+    CurrentValue = predictionTime,
+    Callback = function(v) predictionTime = v end
+})
+
+-- Notification for UI
+Rayfield:Notify({
+    Title = "Aimbot actif",
+    Content = "Appuie sur E pour activer/désactiver",
+    Duration = 3
+})
+
+-- Main loop
+RunService.RenderStepped:Connect(function(dt)
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    if isAimbot then
+        local target = getClosestTarget()
+        if target then aimAt(target, dt) end
+    end
+end)
