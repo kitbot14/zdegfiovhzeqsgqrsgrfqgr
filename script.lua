@@ -6,19 +6,23 @@ local UserInput = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Vérifie si on est bien sur mobile
+-- Vérifie si mobile
 local function isMobile()
     return UserInput.TouchEnabled and not UserInput.KeyboardEnabled
 end
-
 if not isMobile() then return end
 
--- Variables
-local aimbotEnabled, aimSpeed, aimRadius = false, 0.4, 800
+-- Vars
+local aimbotEnabled = false
+local aimSpeed = 0.4
+local aimRadius = 800
 local fovColor = Color3.new(1,1,1)
-local wallhackEnabled, wallColor = false, Color3.new(1,0,0)
+local wallhackEnabled = false
+local wallColor = Color3.new(1,0,0)
+local flyEnabled = false
+local flying = false
 
--- FOV Circle
+-- FOV circle
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Visible = false
 FOVCircle.Thickness = 2
@@ -27,7 +31,7 @@ FOVCircle.Transparency = 0.5
 FOVCircle.Filled = false
 FOVCircle.Radius = aimRadius
 
--- Détection d'allié
+-- Est-ce un allié ?
 local function isAlly(player)
     return player.Team == LocalPlayer.Team
 end
@@ -36,13 +40,12 @@ end
 local function getClosestEnemy()
     local closest = nil
     local shortest = aimRadius
-    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    
+    local screenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and not isAlly(player) then
             local headPos = player.Character.Head.Position
             local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
-            
             if onScreen then
                 local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
                 if dist < shortest then
@@ -52,25 +55,30 @@ local function getClosestEnemy()
             end
         end
     end
-    
+
     return closest
 end
 
--- Aimbot ciblage lisse
+-- Aimbot mobile → on fait tourner le personnage
 local function aimAt(target)
     if target and target.Character and target.Character:FindFirstChild("Head") then
         local headPos = target.Character.Head.Position
-        Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, headPos), aimSpeed)
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local root = char.HumanoidRootPart
+            local dir = (headPos - root.Position).Unit
+            local newCFrame = CFrame.new(root.Position, root.Position + dir)
+            root.CFrame = root.CFrame:Lerp(newCFrame, aimSpeed)
+        end
     end
 end
 
--- Wallhack Client uniquement
+-- Wallhack
 local function updateWallhack()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and not isAlly(p) then
             local char = p.Character
             local hl = char:FindFirstChild("Wallhl")
-            
             if wallhackEnabled then
                 if not hl then
                     hl = Instance.new("Highlight")
@@ -92,18 +100,63 @@ local function updateWallhack()
     end
 end
 
--- Interface Rayfield
+-- Fly mobile avec saut
+local function enableFly()
+    if flying or not flyEnabled then return end
+    flying = true
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "MobileFly"
+    bv.Velocity = Vector3.new(0, 50, 0)
+    bv.MaxForce = Vector3.new(0, 100000, 0)
+    bv.P = 10000
+    bv.Parent = hrp
+end
+
+local function disableFly()
+    flying = false
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local bv = hrp:FindFirstChild("MobileFly")
+        if bv then bv:Destroy() end
+    end
+end
+
+-- Détection du saut
+local function setupJumpFly()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local hum = char:WaitForChild("Humanoid")
+
+    hum.Jumping:Connect(function(isJumping)
+        if flyEnabled then
+            if isJumping then
+                enableFly()
+            else
+                disableFly()
+            end
+        end
+    end)
+end
+LocalPlayer.CharacterAdded:Connect(setupJumpFly)
+if LocalPlayer.Character then
+    setupJumpFly()
+end
+
+-- UI Rayfield
 local Window = Rayfield:CreateWindow({
-    Name = "Mobile ESP + Aimbot",
-    LoadingTitle = "Chargement...",
-    LoadingSubtitle = "Optimisé Mobile",
+    Name = "Aimbot + Fly Mobile",
+    LoadingTitle = "Mobile Script",
+    LoadingSubtitle = "Aimbot & Fly OK",
     Theme = "Midnight",
     ConfigurationSaving = {Enabled = false},
     Discord = {Enabled = false},
     KeySystem = false
 })
 
--- Aimbot UI
 local AimTab = Window:CreateTab("Aimbot", nil)
 AimTab:CreateToggle({
     Name = "Activer Aimbot",
@@ -118,9 +171,7 @@ AimTab:CreateSlider({
     Range = {0.1, 1},
     Increment = 0.1,
     CurrentValue = aimSpeed,
-    Callback = function(v)
-        aimSpeed = v
-    end
+    Callback = function(v) aimSpeed = v end
 })
 AimTab:CreateSlider({
     Name = "Rayon FOV",
@@ -141,7 +192,6 @@ AimTab:CreateColorPicker({
     end
 })
 
--- Wallhack UI
 local WallTab = Window:CreateTab("Wallhack", nil)
 WallTab:CreateToggle({
     Name = "Activer Wallhack",
@@ -160,25 +210,33 @@ WallTab:CreateColorPicker({
     end
 })
 
--- Notification
-Rayfield:Notify({
-    Title = "Script Mobile Chargé",
-    Content = "Aimbot & Wallhack prêts",
-    Duration = 3
+local FlyTab = Window:CreateTab("Fly", nil)
+FlyTab:CreateToggle({
+    Name = "Fly avec bouton Saut",
+    CurrentValue = false,
+    Callback = function(v)
+        flyEnabled = v
+        if not v then disableFly() end
+    end
 })
 
--- Main loop
+Rayfield:Notify({
+    Title = "✅ Chargé",
+    Content = "Aimbot + Fly + ESP OK sur mobile",
+    Duration = 4
+})
+
+-- Boucle principale
 RunService.RenderStepped:Connect(function()
-    -- Update FOV position
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
-    -- Aimbot
     if aimbotEnabled then
         local target = getClosestEnemy()
-        if target then aimAt(target) end
+        if target then
+            aimAt(target)
+        end
     end
 
-    -- Wallhack mise à jour
     if wallhackEnabled then
         updateWallhack()
     end
