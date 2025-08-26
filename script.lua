@@ -5,13 +5,13 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- États
 local isAimbotEnabled = false
-local isWallhackEnabled = false
-
+local aimSpeed = 0.2
 local aimRadius = 1000
 
--- Fonction ciblage/aimer
+local isWallhackEnabled = false
+
+-- Ciblage : trouver le joueur le plus proche du centre de l'écran
 local function getClosestTarget()
     local closest, shortest = nil, aimRadius
     for _, p in ipairs(Players:GetPlayers()) do
@@ -19,7 +19,8 @@ local function getClosestTarget()
             local head = p.Character.Head
             local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
             if onScreen then
-                local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+                local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
                 if dist < shortest then
                     shortest, closest = dist, p
                 end
@@ -29,15 +30,17 @@ local function getClosestTarget()
     return closest
 end
 
+-- Viser en douceur la tête de la cible
 local function aimAt(target)
     if target and target.Character and target.Character:FindFirstChild("Head") then
         local head = target.Character.Head
-        local camPos = Camera.CFrame.Position
-        Camera.CFrame = CFrame.new(camPos, head.Position)
+        local camC0 = Camera.CFrame
+        local newC0 = CFrame.new(camC0.Position, head.Position)
+        Camera.CFrame = camC0:Lerp(newC0, aimSpeed)
     end
 end
 
--- Wallhack visuel
+-- Wallhack visuel amélioré : rouge néon + cercle tête
 local function applyWallhack(state)
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
@@ -47,11 +50,12 @@ local function applyWallhack(state)
                         part.Color = Color3.new(1, 0, 0)
                         part.Material = Enum.Material.Neon
                     else
-                        part.Color = Color3.new(1, 1, 1)
+                        part.Color = part:FindFirstChild("OriginalColor") and part.OriginalColor.Value or Color3.new(1, 1, 1)
                         part.Material = Enum.Material.Plastic
                     end
                 end
             end
+            -- Cercle autour de la tête
             local head = p.Character:FindFirstChild("Head")
             if head then
                 local circle = head:FindFirstChild("WallCircle")
@@ -70,71 +74,98 @@ local function applyWallhack(state)
     end
 end
 
--- SECTION: Rayfield GUI Setup
+--  Rayfield GUI
 local Window = Rayfield:CreateWindow({
-    Name = "Admin Control Panel",
+    Name = "Admin Panel",
     LoadingTitle = "Chargement...",
     LoadingSubtitle = "Admin Tools",
     Theme = "Midnight",
     ToggleUIKeybind = "K",
-    ConfigurationSaving = {
-        Enabled = true,
-        FileName = "AdminControlConfig"
-    },
+    ConfigurationSaving = { Enabled = true, FileName = "AdminConfig" },
     Discord = { Enabled = false },
-    KeySystem = false
+    KeySystem = false,
 })
 
-local MainTab = Window:CreateTab("Main", "rbxassetid://7020476796")
+local Main = Window:CreateTab("Main", nil)
+Main:CreateSection("Aimbot Settings")
 
--- Aimbot Toggle
-MainTab:CreateToggle({
-    Name = "Aimbot",
+-- Toggle Aimbot
+Main:CreateToggle({
+    Name = "Enable Aimbot",
     CurrentValue = false,
+    Flag = "AimToggle",
     Callback = function(state)
         isAimbotEnabled = state
     end,
 })
 
--- Wallhack Toggle
-MainTab:CreateToggle({
-    Name = "Wallhack",
+-- Slider pour la vitesse d'aimbot
+Main:CreateSlider({
+    Name = "Aim Speed",
+    Range = {0.05, 1},
+    Increment = 0.05,
+    Suffix = "",
+    CurrentValue = aimSpeed,
+    Flag = "AimSpeed",
+    Callback = function(val)
+        aimSpeed = val
+    end,
+})
+
+-- Slider pour le rayon d'aimbot
+Main:CreateSlider({
+    Name = "Aim Radius",
+    Range = {100, 2000},
+    Increment = 100,
+    Suffix = "studs",
+    CurrentValue = aimRadius,
+    Flag = "AimRadius",
+    Callback = function(val)
+        aimRadius = val
+    end,
+})
+
+Main:CreateSection("Wallhack")
+Main:CreateToggle({
+    Name = "Enable Wallhack",
     CurrentValue = false,
+    Flag = "WallhackToggle",
     Callback = function(state)
         isWallhackEnabled = state
         applyWallhack(state)
     end,
 })
 
--- Teleportation submenu
-MainTab:CreateButton({
-    Name = "Teleport Menu",
+Main:CreateSection("Teleport")
+Main:CreateButton({
+    Name = "Open Teleport Menu",
     Callback = function()
-        local TeleTab = Window:CreateTab("Teleport", "rbxassetid://6023426926")
+        local TeleTab = Window:CreateTab("Teleport", nil)
+        TeleTab:CreateSection("Players")
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LocalPlayer then
                 TeleTab:CreateButton({
                     Name = p.Name,
                     Callback = function()
-                        local targetHRP = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-                        local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        if targetHRP and myHRP then
-                            myHRP.CFrame = targetHRP.CFrame
+                        local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                        local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp and myHrp then
+                            myHrp.CFrame = hrp.CFrame
                         end
-                    end
+                    end,
                 })
             end
         end
-    end
+    end,
 })
 
 Rayfield:Notify({
-    Title = "Admin Panel Actif",
-    Content = "Utilise les onglets pour configurer",
+    Title = "Admin Panel Loaded",
+    Content = "Utilise le menu pour configurer",
     Duration = 3,
 })
 
--- Render loop
+-- Rendu continu
 RunService.RenderStepped:Connect(function()
     if isAimbotEnabled then
         local target = getClosestTarget()
