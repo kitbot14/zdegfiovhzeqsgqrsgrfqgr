@@ -6,11 +6,19 @@ local Camera = workspace.CurrentCamera
 local enabled = false
 local speed = 0.4
 local radius = 800
-local fovColor = Color3.new(1, 1, 1)
 
--- isAlly basé sur TeamColor (plus fiable pour Rival)
+-- Attend que la team soit bien définie avant de lancer le script
+local function waitForTeam()
+    while not LocalPlayer or not LocalPlayer.TeamColor or LocalPlayer.TeamColor == BrickColor.new("Institutional white") do
+        wait(0.1)
+    end
+end
+waitForTeam()
+
 local function isAlly(player)
+    -- Parfois player.TeamColor peut être nil, on sécurise
     if not player or not player:IsA("Player") then return false end
+    if not player.TeamColor or not LocalPlayer.TeamColor then return false end
     return player.TeamColor == LocalPlayer.TeamColor
 end
 
@@ -21,9 +29,9 @@ local function getClosestEnemy()
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and not isAlly(player) then
-            local part = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
-            if part then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            local targetPart = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
+            if targetPart then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                 if onScreen and screenPos.Z > 0 then
                     local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
                     if dist < shortest then
@@ -34,7 +42,6 @@ local function getClosestEnemy()
             end
         end
     end
-
     return closest
 end
 
@@ -65,10 +72,6 @@ end
 
 function module.SetRadius(v)
     radius = v
-end
-
-function module.SetColor(c)
-    fovColor = c
 end
 
 function module.Update()
