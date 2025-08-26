@@ -5,18 +5,22 @@ local enabled = false
 local enemyColor = Color3.new(1, 0, 0) -- Rouge
 local allyColor = Color3.new(0, 1, 0)  -- Vert
 
--- Récupérer la team via la StringValue "team" dans le personnage
+-- Essaie de récupérer la team de plusieurs façons
 local function getPlayerTeam(player)
+    -- Priorité 1 : StringValue "team" ou "Team" dans le Character
     if player.Character then
         local teamVal = player.Character:FindFirstChild("team") or player.Character:FindFirstChild("Team")
         if teamVal and teamVal:IsA("StringValue") then
             return teamVal.Value
         end
     end
+    -- Priorité 2 : Player.Team (si défini)
+    if player.Team then
+        return player.Team.Name or tostring(player.Team)
+    end
     return nil
 end
 
--- Vérifie si un joueur est allié (même team)
 local function isAlly(player)
     local localTeam = getPlayerTeam(LocalPlayer)
     local otherTeam = getPlayerTeam(player)
@@ -26,7 +30,6 @@ local function isAlly(player)
     return false
 end
 
--- Appliquer ou mettre à jour le Highlight
 local function applyHighlight(player)
     if not player.Character then return end
     local char = player.Character
@@ -41,7 +44,6 @@ local function applyHighlight(player)
         hl.Parent = char
     end
 
-    -- Couleur en fonction de l’équipe
     if isAlly(player) then
         hl.FillColor = allyColor
         hl.OutlineColor = allyColor
@@ -53,7 +55,6 @@ local function applyHighlight(player)
     hl.Enabled = enabled
 end
 
--- Mettre à jour tous les joueurs visibles
 local function updateWallhack()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
@@ -62,7 +63,6 @@ local function updateWallhack()
     end
 end
 
--- Nettoyer tous les highlights
 local function clearHighlights()
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character then
