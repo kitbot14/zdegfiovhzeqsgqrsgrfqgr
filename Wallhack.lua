@@ -2,37 +2,34 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local enabled = false
-local enemyColor = Color3.new(1, 0, 0) -- rouge
-local allyColor = Color3.new(0, 1, 0)  -- vert
+local enemyColor = Color3.new(1, 0, 0) -- rouge par défaut
+local allyColor = Color3.new(0, 1, 0)  -- vert par défaut
 
 local function isAlly(player)
-    if player == LocalPlayer then return false end
-    -- Compare les couleurs d'équipes
+    if player == LocalPlayer then return true end
+    -- Compare les couleurs de l'équipe
     return player.TeamColor == LocalPlayer.TeamColor
+end
+
+local function applyHighlight(p)
+    if not p.Character then return end
+    local char = p.Character
+    local hl = char:FindFirstChild("Wallhl") or Instance.new("Highlight", char)
+    hl.Name = "Wallhl"
+    hl.Adornee = char
+    hl.FillTransparency = 0.5
+    hl.OutlineTransparency = 0
+    return hl
 end
 
 local function updateWallhack()
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local char = p.Character
-            local hl = char:FindFirstChild("Wallhl")
-
-            local color = isAlly(p) and allyColor or enemyColor
-
-            if enabled then
-                if not hl then
-                    hl = Instance.new("Highlight")
-                    hl.Name = "Wallhl"
-                    hl.Adornee = char
-                    hl.FillTransparency = 0.3
-                    hl.OutlineTransparency = 0
-                    hl.Parent = char
-                end
-                hl.FillColor = color
-                hl.OutlineColor = color
-            elseif hl then
-                hl:Destroy()
-            end
+        if p.Character and p ~= LocalPlayer then
+            local hl = applyHighlight(p)
+            hl.Visible = enabled
+            local c = isAlly(p) and allyColor or enemyColor
+            hl.FillColor = c
+            hl.OutlineColor = c
         end
     end
 end
@@ -48,11 +45,23 @@ function module.SetEnabled(v)
                 if hl then hl:Destroy() end
             end
         end
+    else
+        updateWallhack()
     end
 end
 
-function module.SetEnemyColor(c) enemyColor = c end
-function module.SetAllyColor(c)  allyColor = c  end
-function module.Update() if enabled then updateWallhack() end end
+function module.SetEnemyColor(c)
+    enemyColor = c
+end
+
+function module.SetAllyColor(c)
+    allyColor = c
+end
+
+function module.Update()
+    if enabled then
+        updateWallhack()
+    end
+end
 
 return module
