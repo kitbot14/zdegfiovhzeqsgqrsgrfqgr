@@ -1,11 +1,10 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-
-local flyEnabled = false
 local flying = false
+local enabled = false
 
 local function enableFly()
-    if flying or not flyEnabled then return end
+    if flying or not enabled then return end
     flying = true
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -34,7 +33,7 @@ local function setupJumpFly()
     local hum = char:WaitForChild("Humanoid")
 
     hum.Jumping:Connect(function(isJumping)
-        if flyEnabled then
+        if enabled then
             if isJumping then
                 enableFly()
             else
@@ -49,11 +48,13 @@ if LocalPlayer.Character then
     setupJumpFly()
 end
 
-return {
-    setEnabled = function(v)
-        flyEnabled = v
-        if not v then
-            disableFly()
-        end
+local module = {}
+
+function module.SetEnabled(v)
+    enabled = v
+    if not v then
+        disableFly()
     end
-}
+end
+
+return module
