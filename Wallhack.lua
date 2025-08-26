@@ -5,29 +5,19 @@ local enabled = false
 local enemyColor = Color3.new(1, 0, 0) -- Rouge
 local allyColor = Color3.new(0, 1, 0)  -- Vert
 
--- Essaie de récupérer la team de plusieurs façons
-local function getPlayerTeam(player)
-    -- Priorité 1 : StringValue "team" ou "Team" dans le Character
-    if player.Character then
-        local teamVal = player.Character:FindFirstChild("team") or player.Character:FindFirstChild("Team")
-        if teamVal and teamVal:IsA("StringValue") then
-            return teamVal.Value
-        end
-    end
-    -- Priorité 2 : Player.Team (si défini)
-    if player.Team then
-        return player.Team.Name or tostring(player.Team)
+local function getTeamId(player)
+    local teamIdValue = player:FindFirstChild("TeamId")
+    if teamIdValue and teamIdValue:IsA("NumberValue") then
+        return teamIdValue.Value
     end
     return nil
 end
 
+local LocalTeamId = getTeamId(LocalPlayer)
+
 local function isAlly(player)
-    local localTeam = getPlayerTeam(LocalPlayer)
-    local otherTeam = getPlayerTeam(player)
-    if localTeam and otherTeam then
-        return localTeam == otherTeam
-    end
-    return false
+    local teamId = getTeamId(player)
+    return teamId ~= nil and teamId == LocalTeamId
 end
 
 local function applyHighlight(player)
@@ -77,6 +67,7 @@ local module = {}
 function module.SetEnabled(v)
     enabled = v
     if v then
+        LocalTeamId = getTeamId(LocalPlayer)  -- refresh team id on enable
         updateWallhack()
     else
         clearHighlights()
