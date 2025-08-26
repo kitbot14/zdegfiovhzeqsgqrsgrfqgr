@@ -5,13 +5,28 @@ local enabled = false
 local enemyColor = Color3.new(1, 0, 0) -- Rouge
 local allyColor = Color3.new(0, 1, 0)  -- Vert
 
--- ✅ Vérifie si un joueur est dans la même équipe que toi
-local function isAlly(player)
-    if not player or not player:IsA("Player") then return false end
-    return player.Team == LocalPlayer.Team
+-- Récupérer la team via la StringValue "team" dans le personnage
+local function getPlayerTeam(player)
+    if player.Character then
+        local teamVal = player.Character:FindFirstChild("team") or player.Character:FindFirstChild("Team")
+        if teamVal and teamVal:IsA("StringValue") then
+            return teamVal.Value
+        end
+    end
+    return nil
 end
 
--- ✅ Appliquer ou mettre à jour le Highlight
+-- Vérifie si un joueur est allié (même team)
+local function isAlly(player)
+    local localTeam = getPlayerTeam(LocalPlayer)
+    local otherTeam = getPlayerTeam(player)
+    if localTeam and otherTeam then
+        return localTeam == otherTeam
+    end
+    return false
+end
+
+-- Appliquer ou mettre à jour le Highlight
 local function applyHighlight(player)
     if not player.Character then return end
     local char = player.Character
@@ -38,7 +53,7 @@ local function applyHighlight(player)
     hl.Enabled = enabled
 end
 
--- ✅ Mettre à jour tous les joueurs visibles
+-- Mettre à jour tous les joueurs visibles
 local function updateWallhack()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
@@ -47,7 +62,7 @@ local function updateWallhack()
     end
 end
 
--- ✅ Nettoyer tous les highlights
+-- Nettoyer tous les highlights
 local function clearHighlights()
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character then
@@ -57,7 +72,6 @@ local function clearHighlights()
     end
 end
 
--- 📦 Module exporté
 local module = {}
 
 function module.SetEnabled(v)
