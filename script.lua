@@ -6,12 +6,14 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local isAimbot = false
-local aimSpeed = 0.3
-local aimRadius = 800
+local aimSpeed = 0.2
+local aimRadius = 1000
+local aimbotKey = "E"
 
 local isWallhack = false
+local wallColor = Color3.fromRGB(255, 0, 0)
 
--- Fonction de visée lissée
+-- Trouver cible proche
 local function getClosestTarget()
     local closest, shortest = nil, aimRadius
     for _, p in ipairs(Players:GetPlayers()) do
@@ -20,15 +22,14 @@ local function getClosestTarget()
             local screen, onScreen = Camera:WorldToViewportPoint(head.Position)
             if onScreen then
                 local dist = (Vector2.new(screen.X, screen.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                if dist < shortest then
-                    shortest, closest = dist, p
-                end
+                if dist < shortest then shortest, closest = dist, p end
             end
         end
     end
     return closest
 end
 
+-- Aimer smoothely
 local function aimAt(p)
     if p and p.Character and p.Character:FindFirstChild("Head") then
         local head = p.Character.Head
@@ -38,13 +39,13 @@ local function aimAt(p)
     end
 end
 
--- Wallhack stylé
+-- Wallhack color personnalisé
 local function applyWallhack(state)
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
             for _, part in ipairs(p.Character:GetChildren()) do
                 if part:IsA("BasePart") then
-                    part.Color = state and Color3.new(1,0,0) or Color3.new(1,1,1)
+                    part.Color = state and wallColor or Color3.new(1,1,1)
                     part.Material = state and Enum.Material.Neon or Enum.Material.Plastic
                 end
             end
@@ -55,7 +56,7 @@ local function applyWallhack(state)
                     circ = Instance.new("SelectionSphere")
                     circ.Name = "WallCircle"
                     circ.Adornee = head
-                    circ.Color3 = Color3.new(1, 0, 0)
+                    circ.Color3 = wallColor
                     circ.LineThickness = 0.05
                     circ.Parent = head
                 elseif not state and circ then
@@ -66,52 +67,83 @@ local function applyWallhack(state)
     end
 end
 
--- Création du GUI Rayfield
+-- Créer l’interface Rayfield
 local Window = Rayfield:CreateWindow({
     Name = "Admin Panel",
-    LoadingTitle = "Chargement...",
+    LoadingTitle = "Chargement…",
     LoadingSubtitle = "Admin Tools",
     Theme = "Midnight",
-    ToggleUIKeybind = "K",
+    ToggleUIKeybind = aimbotKey,
     ConfigurationSaving = { Enabled = true, FileName = "AdminConfig" },
     Discord = { Enabled = false },
-    KeySystem = false
+    KeySystem = false,
 })
 
 local Main = Window:CreateTab("Main", nil)
-Main:CreateSection("Aimbot")
+
+-- Aimbot
+Main:CreateSection("Aimbot Settings")
 Main:CreateToggle({
     Name = "Enable Aimbot",
-    CurrentValue = false,
-    Callback = function(v) isAimbot = v end
-})
-Main:CreateSlider({
-    Name = "Aim Speed",
-    Range = {0.05, 1}, Increment = 0.05,
-    CurrentValue = aimSpeed,
-    Callback = function(v) aimSpeed = v end
-})
-Main:CreateSlider({
-    Name = "Aim Radius",
-    Range = {100, 2000}, Increment = 100,
-    CurrentValue = aimRadius,
-    Suffix = "studs",
-    Callback = function(v) aimRadius = v end
+    CurrentValue = isAimbot,
+    Flag = "AimbotToggle",
+    Callback = function(v) isAimbot = v end,
 })
 
+Main:CreateSlider({
+    Name = "Aim Speed",
+    Range = {0.05, 1},
+    Increment = 0.05,
+    CurrentValue = aimSpeed,
+    Flag = "AimSpeed",
+    Callback = function(v) aimSpeed = v end,
+})
+
+Main:CreateSlider({
+    Name = "Aim Radius",
+    Range = {100, 2000},
+    Increment = 100,
+    CurrentValue = aimRadius,
+    Flag = "AimRadius",
+    Callback = function(v) aimRadius = v end,
+})
+
+Main:CreateKeybind({
+    Name = "Aimbot Key",
+    CurrentKeybind = aimbotKey,
+    HoldToInteract = false,
+    Flag = "AimbotKey",
+    Callback = function(key)
+        aimbotKey = key
+    end,
+})
+
+-- Wallhack
 Main:CreateSection("Wallhack")
 Main:CreateToggle({
     Name = "Enable Wallhack",
-    CurrentValue = false,
+    CurrentValue = isWallhack,
+    Flag = "WallhackToggle",
     Callback = function(v)
         isWallhack = v
         applyWallhack(v)
-    end
+    end,
+})
+Main:CreateColorPicker({
+    Name = "Wallhack Color",
+    Color = wallColor,
+    Flag = "WallColor",
+    Callback = function(c)
+        wallColor = c
+        if isWallhack then applyWallhack(true) end
+    end,
 })
 
+-- Teleportation
 Main:CreateSection("Teleport")
 Main:CreateButton({
     Name = "Open Teleport Menu",
+    Flag = "TeleportBtn",
     Callback = function()
         local Tele = Window:CreateTab("Teleport", nil)
         Tele:CreateSection("Players")
@@ -120,26 +152,24 @@ Main:CreateButton({
                 Tele:CreateButton({
                     Name = p.Name,
                     Callback = function()
-                        local target = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-                        local mine = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        if target and mine then
-                            mine.CFrame = target.CFrame
-                        end
-                    end
+                        local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                        local myhrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp and myhrp then myhrp.CFrame = hrp.CFrame end
+                    end,
                 })
             end
         end
-    end
+    end,
 })
 
 Rayfield:Notify({
-    Title = "Admin Panel ready",
-    Content = "Appuie sur K pour ouvrir le menu",
-    Duration = 3
+    Title = "Admin Panel Chargé",
+    Content = "Appuie sur "..aimbotKey.." pour l'Onglet",
+    Duration = 3,
 })
 
 RunService.RenderStepped:Connect(function()
-    if isAimbot then
+    if isAimbot and (not aimbotKey or aimbotKey == "") then
         local t = getClosestTarget()
         aimAt(t)
     end
