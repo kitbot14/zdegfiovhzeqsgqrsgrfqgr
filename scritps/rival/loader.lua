@@ -1,32 +1,22 @@
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
-local UserInputService = game:GetService("UserInputService")
 
--- Aimbot Settings
+-- === Variables de configuration ===
 local aimbotEnabled = false
 local aimbotFOV = 100
 local aimbotMaxDistance = 100
-local aimbotTargetPart = "Head" -- or "Torso", "Random"
-local aimbotHeadshotChance = 100
+local aimbotHeadshotChance = 100  -- % de chance de viser la tête
 
--- ESP
 local espEnabled = false
+local jumpBoostEnabled = false
+local jumpBoostPower = 100
 
--- Fly
-local flyEnabled = false
-local flySpeed = 50
-local verticalFlyDir = 0
-
--- Jump
-local jumpPower = 50
-
--- UI Window
+-- === UI ===
 local Window = Rayfield:CreateWindow({
-    Name = "HACKER CORE UI",
+    Name = "Hacker Core UI",
     LoadingTitle = "Chargement...",
     LoadingSubtitle = "By You",
     ConfigurationSaving = { Enabled = false },
@@ -34,199 +24,99 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
---------------------------
--- AIMBOT TAB
---------------------------
+-- 🔫 Aimbot Tab
 local Combat = Window:CreateTab("Aimbot", 4483362458)
+Combat:CreateToggle({ Name = "Activer Aimbot", CurrentValue = false, Callback = function(v) aimbotEnabled = v end })
+Combat:CreateSlider({ Name = "FOV (px)", Range = {10, 300}, Increment = 10, CurrentValue = 100, Callback = function(v) aimbotFOV = v end })
+Combat:CreateSlider({ Name = "Distance max (studs)", Range = {10, 300}, Increment = 10, CurrentValue = 100, Callback = function(v) aimbotMaxDistance = v end })
+Combat:CreateSlider({ Name = "Chance de Headshot (%)", Range = {0,100}, Increment = 5, CurrentValue = 100, Callback = function(v) aimbotHeadshotChance = v end })
 
-Combat:CreateToggle({
-    Name = "Activer Aimbot",
+--  ESP Tab
+local Visuals = Window:CreateTab("ESP", 4483362733)
+Visuals:CreateToggle({
+    Name = "Wallhack (ESP)",
     CurrentValue = false,
-    Callback = function(Value)
-        aimbotEnabled = Value
-    end,
+    Callback = function(v)
+        espEnabled = v
+        for _, p in ipairs(Players:GetPlayers()) do addOrRemoveHighlight(p) end
+    end
 })
 
-Combat:CreateDropdown({
-    Name = "Zone à viser",
-    Options = {"Head", "Torso", "Random"},
-    CurrentOption = "Head",
-    Callback = function(Option)
-        aimbotTargetPart = Option
-    end,
-})
+--  Jump Boost Tab
+local Movement = Window:CreateTab("Jump Boost", 4483363013)
+Movement:CreateToggle({ Name = "Activer Jump Boost", CurrentValue = false, Callback = function(v) jumpBoostEnabled = v end })
+Movement:CreateSlider({ Name = "Jump Power", Range = {50, 300}, Increment = 10, CurrentValue = 100, Callback = function(v) jumpBoostPower = v end })
 
-Combat:CreateSlider({
-    Name = "Chance de viser la tête (%)",
-    Range = {0, 100},
-    Increment = 5,
-    CurrentValue = 100,
-    Callback = function(Value)
-        aimbotHeadshotChance = Value
-    end,
-})
+-- Helper : (Re)crée l'Highlight pour un joueur donné
+function addHighlight(player)
+    if player == LocalPlayer or not player.Character then return end
+    if not player.Character:FindFirstChild("PLAYER_HL") then
+        local hl = Instance.new("Highlight")
+        hl.Name = "PLAYER_HL"
+        hl.FillColor = Color3.new(1,0,0)
+        hl.FillTransparency = 0.3
+        hl.OutlineColor = Color3.new(1,1,1)
+        hl.OutlineTransparency = 0
+        hl.Adornee = player.Character
+        hl.Parent = player.Character
+    end
+end
 
-Combat:CreateSlider({
-    Name = "FOV (distance à l'écran)",
-    Range = {10, 300},
-    Increment = 10,
-    CurrentValue = 100,
-    Callback = function(Value)
-        aimbotFOV = Value
-    end,
-})
+function removeHighlight(player)
+    if player.Character then
+        local h = player.Character:FindFirstChild("PLAYER_HL")
+        if h then h:Destroy() end
+    end
+end
 
-Combat:CreateSlider({
-    Name = "Distance max (studs)",
-    Range = {10, 300},
-    Increment = 10,
-    CurrentValue = 100,
-    Callback = function(Value)
-        aimbotMaxDistance = Value
-    end,
-})
+function addOrRemoveHighlight(player)
+    if espEnabled then addHighlight(player) else removeHighlight(player) end
+end
 
--- Aimbot Logic
+-- === Connexions utiles ===
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function()
+        addOrRemoveHighlight(p)
+    end)
+end)
+Players.PlayerRemoving:Connect(function(p)
+    removeHighlight(p)
+end)
+
+-- === Boucle principale ===
 RunService.RenderStepped:Connect(function()
-    if not aimbotEnabled then return end
-
-    local closest = nil
-    local shortest = math.huge
-
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local targetPartName = aimbotTargetPart
-            if targetPartName == "Random" then
-                targetPartName = math.random(1, 100) <= aimbotHeadshotChance and "Head" or "Torso"
-            end
-
-            local part = player.Character:FindFirstChild(targetPartName)
-            if part then
-                local dist3D = (part.Position - Camera.CFrame.Position).Magnitude
-                if dist3D <= aimbotMaxDistance then
-                    local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
-                    if onScreen then
-                        local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                        if dist2D < shortest and dist2D < aimbotFOV then
-                            shortest = dist2D
-                            closest = part
+    -- Aimbot logique
+    if aimbotEnabled then
+        local best, bestDist = nil, math.huge
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local dist = (p.Character.HumanoidRootPart.Position - Camera.CFrame.Position).Magnitude
+                if dist <= aimbotMaxDistance then
+                    local targetPart = math.random(1,100) <= aimbotHeadshotChance and p.Character:FindFirstChild("Head") or p.Character:FindFirstChild("Torso")
+                    if targetPart then
+                        local screenPos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
+                        if onScreen then
+                            local d = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                            if d < bestDist and d < aimbotFOV then
+                                bestDist, best = d, targetPart
+                            end
                         end
                     end
                 end
             end
         end
+        if best then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, best.Position)
+        end
     end
 
-    if closest then
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, closest.Position)
+    -- Jump Boost
+    if jumpBoostEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.JumpPower = jumpBoostPower
     end
-end)
 
---------------------------
--- ESP TAB
---------------------------
-local Visuals = Window:CreateTab("ESP", 4483362733)
-
-Visuals:CreateToggle({
-    Name = "Wallhack (ESP)",
-    CurrentValue = false,
-    Callback = function(Value)
-        espEnabled = Value
-
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character then
-                if Value then
-                    local hl = Instance.new("Highlight")
-                    hl.Name = "PLAYER_HL"
-                    hl.FillColor = Color3.new(1, 0, 0)
-                    hl.FillTransparency = 0.3
-                    hl.OutlineColor = Color3.new(1, 1, 1)
-                    hl.Adornee = player.Character
-                    hl.Parent = player.Character
-                else
-                    local h = player.Character:FindFirstChild("PLAYER_HL")
-                    if h then h:Destroy() end
-                end
-            end
-        end
-
-        -- New players
-        Players.PlayerAdded:Connect(function(p)
-            p.CharacterAdded:Connect(function(c)
-                if espEnabled then
-                    local hl = Instance.new("Highlight")
-                    hl.Name = "PLAYER_HL"
-                    hl.FillColor = Color3.new(1, 0, 0)
-                    hl.FillTransparency = 0.3
-                    hl.OutlineColor = Color3.new(1, 1, 1)
-                    hl.Adornee = c
-                    hl.Parent = c
-                end
-            end)
-        end)
-    end,
-})
-
---------------------------
--- MOUVEMENT TAB (Fly + Jump)
---------------------------
-local Movement = Window:CreateTab("Mouvement", 4483363013)
-
-Movement:CreateSlider({
-    Name = "Jump Power",
-    Range = {50, 200},
-    Increment = 10,
-    CurrentValue = 50,
-    Callback = function(Value)
-        jumpPower = Value
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.JumpPower = jumpPower
-        end
-    end,
-})
-
-Movement:CreateToggle({
-    Name = "Fly Mode",
-    CurrentValue = false,
-    Callback = function(Value)
-        flyEnabled = Value
-        verticalFlyDir = 0
-    end,
-})
-
-Movement:CreateSlider({
-    Name = "Fly Speed",
-    Range = {10, 150},
-    Increment = 10,
-    CurrentValue = 50,
-    Callback = function(Value)
-        flySpeed = Value
-    end,
-})
-
--- Buttons for vertical fly (for mobile)
-Movement:CreateButton({
-    Name = "⬆️ Monter (Fly)",
-    Callback = function()
-        verticalFlyDir = 1
-        task.delay(0.2, function() verticalFlyDir = 0 end)
-    end,
-})
-
-Movement:CreateButton({
-    Name = "⬇️ Descendre (Fly)",
-    Callback = function()
-        verticalFlyDir = -1
-        task.delay(0.2, function() verticalFlyDir = 0 end)
-    end,
-})
-
--- Fly logic
-RunService.RenderStepped:Connect(function()
-    if flyEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local root = LocalPlayer.Character.HumanoidRootPart
-        local cam = workspace.CurrentCamera.CFrame
-        local moveDirection = Vector3.new(cam.LookVector.X, 0, cam.LookVector.Z).Unit
-        root.Velocity = (moveDirection * flySpeed) + Vector3.new(0, verticalFlyDir * flySpeed, 0)
+    -- Force recreate highlights si supprimés
+    if espEnabled then
+        for _, p in ipairs(Players:GetPlayers()) do addHighlight(p) end
     end
 end)
