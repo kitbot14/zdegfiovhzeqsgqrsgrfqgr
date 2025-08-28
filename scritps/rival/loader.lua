@@ -2,50 +2,83 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
+local UserInputService = game:GetService("UserInputService")
 
--- Settings
+-- Aimbot Settings
 local aimbotEnabled = false
-local aimbotFOV = 150
+local aimbotFOV = 100
 local aimbotMaxDistance = 100
-local wallhackEnabled = false
+local aimbotTargetPart = "Head" -- or "Torso", "Random"
+local aimbotHeadshotChance = 100
+
+-- ESP
+local espEnabled = false
+
+-- Fly
 local flyEnabled = false
 local flySpeed = 50
+local verticalFlyDir = 0
+
+-- Jump
 local jumpPower = 50
 
--- Fly movement state
-local flying = false
-local moveDir = Vector3.zero
-
--- UI Setup
+-- UI Window
 local Window = Rayfield:CreateWindow({
-    Name = "Hacker Menu",
-    LoadingTitle = "Hacking Interface",
+    Name = "HACKER CORE UI",
+    LoadingTitle = "Chargement...",
     LoadingSubtitle = "By You",
     ConfigurationSaving = { Enabled = false },
     Discord = { Enabled = false },
     KeySystem = false
 })
 
------------------------------------
--- Combat (Aimbot sur joueurs)
------------------------------------
-local Combat = Window:CreateTab("Combat", 4483362458)
+--------------------------
+-- AIMBOT TAB
+--------------------------
+local Combat = Window:CreateTab("Aimbot", 4483362458)
 
 Combat:CreateToggle({
-    Name = "Aimbot (Joueurs)",
+    Name = "Activer Aimbot",
     CurrentValue = false,
     Callback = function(Value)
         aimbotEnabled = Value
     end,
 })
 
+Combat:CreateDropdown({
+    Name = "Zone à viser",
+    Options = {"Head", "Torso", "Random"},
+    CurrentOption = "Head",
+    Callback = function(Option)
+        aimbotTargetPart = Option
+    end,
+})
+
 Combat:CreateSlider({
-    Name = "Max Distance Aimbot",
-    Range = {10, 500},
+    Name = "Chance de viser la tête (%)",
+    Range = {0, 100},
+    Increment = 5,
+    CurrentValue = 100,
+    Callback = function(Value)
+        aimbotHeadshotChance = Value
+    end,
+})
+
+Combat:CreateSlider({
+    Name = "FOV (distance à l'écran)",
+    Range = {10, 300},
+    Increment = 10,
+    CurrentValue = 100,
+    Callback = function(Value)
+        aimbotFOV = Value
+    end,
+})
+
+Combat:CreateSlider({
+    Name = "Distance max (studs)",
+    Range = {10, 300},
     Increment = 10,
     CurrentValue = 100,
     Callback = function(Value)
@@ -53,23 +86,31 @@ Combat:CreateSlider({
     end,
 })
 
--- Aimbot logic
+-- Aimbot Logic
 RunService.RenderStepped:Connect(function()
     if not aimbotEnabled then return end
+
     local closest = nil
     local shortest = math.huge
 
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-            local head = player.Character.Head
-            local dist3D = (head.Position - Camera.CFrame.Position).Magnitude
-            if dist3D <= aimbotMaxDistance then
-                local screenPos, onScreen = Camera:WorldToScreenPoint(head.Position)
-                if onScreen then
-                    local dist2D = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                    if dist2D < shortest and dist2D < aimbotFOV then
-                        shortest = dist2D
-                        closest = head
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local targetPartName = aimbotTargetPart
+            if targetPartName == "Random" then
+                targetPartName = math.random(1, 100) <= aimbotHeadshotChance and "Head" or "Torso"
+            end
+
+            local part = player.Character:FindFirstChild(targetPartName)
+            if part then
+                local dist3D = (part.Position - Camera.CFrame.Position).Magnitude
+                if dist3D <= aimbotMaxDistance then
+                    local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
+                    if onScreen then
+                        local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                        if dist2D < shortest and dist2D < aimbotFOV then
+                            shortest = dist2D
+                            closest = part
+                        end
                     end
                 end
             end
@@ -81,57 +122,55 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
------------------------------------
--- Visuals (Wallhack ESP)
------------------------------------
-local Visuals = Window:CreateTab("Visuals", 4483362733)
+--------------------------
+-- ESP TAB
+--------------------------
+local Visuals = Window:CreateTab("ESP", 4483362733)
 
 Visuals:CreateToggle({
-    Name = "Wallhack Joueurs (ESP)",
+    Name = "Wallhack (ESP)",
     CurrentValue = false,
     Callback = function(Value)
-        wallhackEnabled = Value
+        espEnabled = Value
 
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character then
                 if Value then
                     local hl = Instance.new("Highlight")
-                    hl.Name = "PLAYER_HIGHLIGHT"
+                    hl.Name = "PLAYER_HL"
                     hl.FillColor = Color3.new(1, 0, 0)
                     hl.FillTransparency = 0.3
                     hl.OutlineColor = Color3.new(1, 1, 1)
-                    hl.OutlineTransparency = 0
                     hl.Adornee = player.Character
                     hl.Parent = player.Character
                 else
-                    local old = player.Character:FindFirstChild("PLAYER_HIGHLIGHT")
-                    if old then old:Destroy() end
+                    local h = player.Character:FindFirstChild("PLAYER_HL")
+                    if h then h:Destroy() end
                 end
             end
         end
 
-        -- For new players
-        Players.PlayerAdded:Connect(function(player)
-            player.CharacterAdded:Connect(function(char)
-                if wallhackEnabled then
+        -- New players
+        Players.PlayerAdded:Connect(function(p)
+            p.CharacterAdded:Connect(function(c)
+                if espEnabled then
                     local hl = Instance.new("Highlight")
-                    hl.Name = "PLAYER_HIGHLIGHT"
+                    hl.Name = "PLAYER_HL"
                     hl.FillColor = Color3.new(1, 0, 0)
                     hl.FillTransparency = 0.3
                     hl.OutlineColor = Color3.new(1, 1, 1)
-                    hl.OutlineTransparency = 0
-                    hl.Adornee = char
-                    hl.Parent = char
+                    hl.Adornee = c
+                    hl.Parent = c
                 end
             end)
         end)
     end,
 })
 
------------------------------------
--- Movement (Fly + JumpBoost)
------------------------------------
-local Movement = Window:CreateTab("Movement", 4483363013)
+--------------------------
+-- MOUVEMENT TAB (Fly + Jump)
+--------------------------
+local Movement = Window:CreateTab("Mouvement", 4483363013)
 
 Movement:CreateSlider({
     Name = "Jump Power",
@@ -147,14 +186,11 @@ Movement:CreateSlider({
 })
 
 Movement:CreateToggle({
-    Name = "Fly",
+    Name = "Fly Mode",
     CurrentValue = false,
     Callback = function(Value)
         flyEnabled = Value
-        flying = Value
-        if not Value and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            LocalPlayer.Character.HumanoidRootPart.Anchored = false
-        end
+        verticalFlyDir = 0
     end,
 })
 
@@ -168,62 +204,29 @@ Movement:CreateSlider({
     end,
 })
 
--- Input handling for fly
-local moveVector = Vector3.zero
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.W then moveVector = moveVector + Vector3.new(0, 0, -1) end
-    if input.KeyCode == Enum.KeyCode.S then moveVector = moveVector + Vector3.new(0, 0, 1) end
-    if input.KeyCode == Enum.KeyCode.A then moveVector = moveVector + Vector3.new(-1, 0, 0) end
-    if input.KeyCode == Enum.KeyCode.D then moveVector = moveVector + Vector3.new(1, 0, 0) end
-    if input.KeyCode == Enum.KeyCode.Space then moveVector = moveVector + Vector3.new(0, 1, 0) end
-    if input.KeyCode == Enum.KeyCode.LeftShift then moveVector = moveVector + Vector3.new(0, -1, 0) end
-end)
+-- Buttons for vertical fly (for mobile)
+Movement:CreateButton({
+    Name = "⬆️ Monter (Fly)",
+    Callback = function()
+        verticalFlyDir = 1
+        task.delay(0.2, function() verticalFlyDir = 0 end)
+    end,
+})
 
-UserInputService.InputEnded:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.W then moveVector = moveVector - Vector3.new(0, 0, -1) end
-    if input.KeyCode == Enum.KeyCode.S then moveVector = moveVector - Vector3.new(0, 0, 1) end
-    if input.KeyCode == Enum.KeyCode.A then moveVector = moveVector - Vector3.new(-1, 0, 0) end
-    if input.KeyCode == Enum.KeyCode.D then moveVector = moveVector - Vector3.new(1, 0, 0) end
-    if input.KeyCode == Enum.KeyCode.Space then moveVector = moveVector - Vector3.new(0, 1, 0) end
-    if input.KeyCode == Enum.KeyCode.LeftShift then moveVector = moveVector - Vector3.new(0, -1, 0) end
-end)
+Movement:CreateButton({
+    Name = "⬇️ Descendre (Fly)",
+    Callback = function()
+        verticalFlyDir = -1
+        task.delay(0.2, function() verticalFlyDir = 0 end)
+    end,
+})
 
--- Fly movement update
+-- Fly logic
 RunService.RenderStepped:Connect(function()
-    if flying and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+    if flyEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         local root = LocalPlayer.Character.HumanoidRootPart
-        root.Anchored = false
-        local camCF = Camera.CFrame
-        local moveDir = camCF:VectorToWorldSpace(moveVector)
-        root.Velocity = moveDir.Unit * flySpeed
+        local cam = workspace.CurrentCamera.CFrame
+        local moveDirection = Vector3.new(cam.LookVector.X, 0, cam.LookVector.Z).Unit
+        root.Velocity = (moveDirection * flySpeed) + Vector3.new(0, verticalFlyDir * flySpeed, 0)
     end
 end)
-
------------------------------------
--- Hacking Tools (Fake)
------------------------------------
-local HackTab = Window:CreateTab("Hack Tools", 4483362910)
-
-HackTab:CreateButton({
-    Name = "🔓 Hacker une porte",
-    Callback = function()
-        Rayfield:Notify({
-            Title = "Hack en cours...",
-            Content = "Porte débloquée avec succès.",
-            Duration = 4
-        })
-    end,
-})
-
-HackTab:CreateButton({
-    Name = "🛑 Désactiver tourelle",
-    Callback = function()
-        Rayfield:Notify({
-            Title = "Hack réussi",
-            Content = "Tourelle désactivée.",
-            Duration = 4
-        })
-    end,
-})
